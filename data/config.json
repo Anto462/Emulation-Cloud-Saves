@@ -1,0 +1,43 @@
+{
+  "emulators": {
+    "ps2": {
+      "name": "PlayStation 2",
+      "emulator": "PCSX2",
+      "extension": ".ps2",
+      "save_type": "dual_file",
+      "icon": "assets/icons/ps2.png",
+      "local_path": "",
+      "drive_id": ""
+    },
+    "ds": {
+      "name": "Nintendo DS",
+      "emulator": "Melon DS",
+      "extension": ".sav",
+      "save_type": "multi_file",
+      "icon": "assets/icons/ds.png",
+      "local_path": "",
+      "drive_id": ""
+    },
+    "3ds": {
+      "name": "Nintendo 3DS",
+      "emulator": "Citra",
+      "extension": "folder",
+      "save_type": "folder",
+      "icon": "assets/icons/3ds.png",
+      "local_path": "",
+      "drive_id": ""
+    },
+    "psp": {
+      "name": "PlayStation Portable",
+      "emulator": "PPSSPP",
+      "extension": "folder",
+      "save_type": "folder",
+      "icon": "assets/icons/psp.png",
+      "local_path": "",
+      "drive_id": ""
+    }
+  },
+  "settings": {
+    "language": "es"
+  }
+}
