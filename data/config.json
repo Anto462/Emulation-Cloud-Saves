@@ -7,7 +7,8 @@
       "save_type": "dual_file",
       "icon": "assets/icons/ps2.png",
       "local_path": "",
-      "drive_id": ""
+      "drive_id": "",
+      "custom": false
     },
     "ds": {
       "name": "Nintendo DS",
@@ -16,7 +17,8 @@
       "save_type": "multi_file",
       "icon": "assets/icons/ds.png",
       "local_path": "",
-      "drive_id": ""
+      "drive_id": "",
+      "custom": false
     },
     "3ds": {
       "name": "Nintendo 3DS",
@@ -25,7 +27,8 @@
       "save_type": "folder",
       "icon": "assets/icons/3ds.png",
       "local_path": "",
-      "drive_id": ""
+      "drive_id": "",
+      "custom": false
     },
     "psp": {
       "name": "PlayStation Portable",
@@ -34,7 +37,8 @@
       "save_type": "folder",
       "icon": "assets/icons/psp.png",
       "local_path": "",
-      "drive_id": ""
+      "drive_id": "",
+      "custom": false
     }
   },
   "settings": {

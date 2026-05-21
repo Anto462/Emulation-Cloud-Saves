@@ -2,6 +2,13 @@ import sys
 import os
 
 
+def app_dir():
+    """Next to .exe in bundle mode, project root in dev."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def resource_path(relative_path):
     """Resolve path for both development and PyInstaller compiled builds.
        It helps so we can access all the diferent def, assets and folders for the files we need
