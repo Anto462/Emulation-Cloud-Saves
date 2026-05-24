@@ -1,7 +1,7 @@
 """
 main.py — comand to build the .exe
 
-python -m PyInstaller main.py --onefile --noconsole --name "CloudSaveHub" --add-data "ui;ui" --add-data "data;data" --add-data "lang;lang" --add-data "assets;assets" --add-data "credentials.json;." --collect-all webview --hidden-import="webview.platforms.winforms" --hidden-import="clr" --hidden-import="google.auth.transport.requests" --hidden-import="google.oauth2.credentials" --hidden-import="google_auth_oauthlib.flow" --icon "Cloudemustorage.ico"
+python -m PyInstaller main.py --onefile --noconsole --name "CloudSaveHub" --add-data "ui;ui" --add-data "data;data" --add-data "lang;lang" --add-data "assets;assets" --collect-all webview --hidden-import="webview.platforms.winforms" --hidden-import="clr" --hidden-import="google.auth.transport.requests" --hidden-import="google.oauth2.credentials" --hidden-import="google_auth_oauthlib.flow" --icon "Cloudemustorage.ico"
 
 """
 
