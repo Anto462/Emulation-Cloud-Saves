@@ -1,42 +1,63 @@
 import json
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
-from core.utils import resource_path
+from core.utils import resource_path, app_dir
 
 
-def load_config(): # Load the data from the json
-    config_path = resource_path("data/config.json")
-    with open(config_path, 'r', encoding='utf-8') as f:
+# ----------------------------------------------------------------
+# Rutas de config.json
+#
+# En modo bundle (.exe):
+#   - Lectura/escritura → app_dir()/data/config.json  (escribible, junto al .exe)
+#   - Primera ejecución → copia automática desde el bundle (sys._MEIPASS)
+#
+# En modo desarrollo:
+#   - Lectura/escritura → resource_path('data/config.json')  (raíz del proyecto)
+# ----------------------------------------------------------------
+
+def _config_path() -> str:
+    """Devuelve la ruta escribible de config.json según el entorno."""
+    if getattr(sys, 'frozen', False):
+        user_path = Path(app_dir()) / 'data' / 'config.json'
+        if not user_path.exists():
+            # Primera ejecución del .exe: copiar el config por defecto del bundle
+            user_path.parent.mkdir(parents=True, exist_ok=True)
+            bundled = Path(resource_path('data/config.json'))
+            shutil.copy2(bundled, user_path)
+        return str(user_path)
+    return resource_path('data/config.json')
+
+
+def load_config():
+    with open(_config_path(), 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
-def save_config(config): # Save data on the json
-    config_path = resource_path("data/config.json")
-    with open(config_path, 'w', encoding='utf-8') as f:
+def save_config(config):
+    with open(_config_path(), 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
-def load_lang(lang_code): # This loads a lang json, I will probablly first add spanish and english - Este es un json que se usa como base para soportar disntintos idiomas, inicialmente busco soportar español e ingles
-    lang_path = resource_path(f"lang/{lang_code}.json")
+def load_lang(lang_code):
+    # Los archivos de idioma son assets de solo lectura — siempre desde resource_path
+    lang_path = resource_path(f'lang/{lang_code}.json')
     with open(lang_path, 'r', encoding='utf-8') as f:
         return json.load(f)
 
 
 def get_local_mtime(local_path, save_type):
-    """Return the most recent modification timestamp for a saves on the local path, or None.
-       Helps to compare the time with the drive time   
-    """
+    """Return the most recent modification timestamp for saves on the local path, or None."""
     path = Path(local_path)
     if not path.exists():
         return None
 
-    if save_type == "folder":
+    if save_type == 'folder':
         mtimes = [f.stat().st_mtime for f in path.rglob('*') if f.is_file()]
     else:
-        # dual_file / file: check all files directly inside the directory
         if path.is_dir():
             mtimes = [f.stat().st_mtime for f in path.iterdir() if f.is_file()]
         else:
@@ -46,14 +67,9 @@ def get_local_mtime(local_path, save_type):
 
 
 def compress_folder(folder_path):
-    """Compress folder contents into a temp ZIP. 
-       Returns the ZIP file path.
-       
-       zip_base: The folder zip and the path to it
-    """
+    """Compress folder contents into a temp ZIP. Returns the ZIP file path."""
     temp_dir = tempfile.mkdtemp()
-    zip_base = os.path.join(temp_dir, "saves")
-    # Archives contents of folder_path at root level (no top-level folder inside ZIP) - Crear el Zip con los archivos dentro de la carpeta selecionada, no comprime la cerpeta en si. Por ejemplo si la ruta es xxxx/xxxx/Saves/ el comprime todo lo que esta dentro de Saves pero no la carpeta Saves como tal
+    zip_base = os.path.join(temp_dir, 'saves')
     zip_path = shutil.make_archive(zip_base, 'zip', folder_path)
     return zip_path
 

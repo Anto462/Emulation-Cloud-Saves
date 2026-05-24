@@ -1,12 +1,8 @@
 """
-PYINSTALLER COMMAND:
-  pyinstaller main.py --onefile --noconsole
-      --add-data "ui;ui"
-      --add-data "data;data"
-      --add-data "lang;lang"
-      --add-data "assets;assets"
-      --add-data "credentials.json;."
-      --icon Cloudemustorage.ico
+main.py — comand to build the .exe
+
+python -m PyInstaller main.py --onefile --noconsole --name "CloudSaveHub" --add-data "ui;ui" --add-data "data;data" --add-data "lang;lang" --add-data "assets;assets" --add-data "credentials.json;." --collect-all webview --hidden-import="webview.platforms.winforms" --hidden-import="clr" --hidden-import="google.auth.transport.requests" --hidden-import="google.oauth2.credentials" --hidden-import="google_auth_oauthlib.flow" --icon "Cloudemustorage.ico"
+
 """
 
 import os
@@ -28,12 +24,16 @@ from core.utils import resource_path, app_dir
 
 
 # ============================================================
-# TÍTULO DE VENTANA
+# TÍTULO DE VENTANA 
 # ============================================================
 
 def _apply_dark_frame(*_):
     """
-    BORDER COLOR
+    Cambia el color de la barra de título a near-black y el borde
+    a rojo usando la API DWM de Windows (disponible en Windows 11+).
+
+    Se llama desde window.events.loaded para que el HWND ya exista.
+
     COLORREF format: 0x00BBGGRR (azul/verde/rojo en bytes)
       #0f0f0f → R=0x0f G=0x0f B=0x0f → COLORREF = 0x000f0f0f
       #cc0000 → R=0xcc G=0x00 B=0x00 → COLORREF = 0x000000cc
@@ -234,7 +234,7 @@ class Api:
 
     # ----------------------------------------------------------------
     # Operaciones de sincronización con Drive
-    # PyWebView ejecuta estos métodos en hilos secundarios → la UI
+    # PyWebView ejecuta estos métodos en hilos secundarios, la UI
     # permanece reactiva durante uploads/downloads largos.
     # ----------------------------------------------------------------
 
@@ -302,7 +302,7 @@ class Api:
             return {'success': False, 'error': str(e)}
 
     # ----------------------------------------------------------------
-    # Multi-file per-game management (MelonDS / DS)
+    # Multi-file per-game management
     # ----------------------------------------------------------------
 
     def list_local_saves(self, emulator_key):
@@ -450,9 +450,18 @@ class Api:
         return icons
 
     def check_credentials(self):
-        """Verifica si credentials.json existe en el directorio de la app."""
-        path = os.path.join(app_dir(), 'credentials.json')
-        return {'exists': os.path.isfile(path), 'path': path}
+        """
+        Verifica si credentials.json está disponible.
+        Prioridad: app_dir() (importado por el usuario) → resource_path() (bundleado).
+        """
+        user_path    = os.path.join(app_dir(), 'credentials.json')
+        bundled_path = resource_path('credentials.json')
+
+        if os.path.isfile(user_path):
+            return {'exists': True, 'path': user_path, 'source': 'user'}
+        if os.path.isfile(bundled_path):
+            return {'exists': True, 'path': bundled_path, 'source': 'bundled'}
+        return {'exists': False, 'path': user_path, 'source': None}
 
     def import_credentials(self):
         """
@@ -477,7 +486,7 @@ class Api:
             return {'success': False, 'error': str(e)}
 
     # ----------------------------------------------------------------
-    # Gestión de emuladores personalizados
+    # Gestión de emuladores
     # ----------------------------------------------------------------
 
     def select_emulator_icon(self):

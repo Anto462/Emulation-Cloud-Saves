@@ -1,0 +1,10 @@
+# Instalar con:
+#   pip install -r requirements.txt
+
+# Ventana nativa con Edge WebView2 (HTML/CSS/JS → Python bridge)
+pywebview==6.2.1
+
+# Google Drive API — autenticación OAuth 2.0 y cliente REST
+google-auth==2.53.0
+google-auth-oauthlib==1.4.0
+google-api-python-client==2.196.0
