@@ -1,0 +1,1101 @@
+/* VT323: fuente pixel/terminal para readouts del sistema, estados y timestamps */
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+
+/* ============================================================
+   styles.css
+
+   Inspirado en UI de juegos como Persona 5 y Daemon X Machina
+   ========= */
+
+
+/* ============================================================
+   VARIABLES DEL TEMA
+   ============================================================ */
+:root {
+    --red:        #cc0000;   /* Rojo principal */
+    --red-bright: #ff2233;   /* Rojo brillante para hovers */
+    --red-dark:   #880000;   /* Rojo oscuro para estados pulsados */
+    --bg:         #0d0d0d;   /* Negro del fondo general */
+    --bg-card:    #141414;   /* Negro de las tarjetas (ligeramente más claro) */
+    --bg-panel:   #0f0f0f;   /* Negro de paneles y header */
+    --bg-input:   #0a0a0a;   /* Negro de los campos de texto */
+    --text:       #ffffff;   /* Blanco principal */
+    --text-dim:   #777777;   /* Gris para textos secundarios */
+    --border:     #1e1e1e;   /* Gris muy oscuro para bordes */
+
+    /* Paleta fósforo: reservada para comunicación del sistema (no del usuario) */
+    --phosphor:      #00e676;
+    --phosphor-dim:  #00b34a;
+    --phosphor-glow: rgba(0, 230, 118, 0.28);
+
+    /* Fuente terminal para datos técnicos */
+    --font-mono: 'VT323', 'Courier New', monospace;
+
+    /* Ámbar: estado de transición (conectando, checking) */
+    --amber: #f59e0b;
+}
+
+
+/* ============================================================
+   RESET Y BASE
+   ============================================================ */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;  /* padding no agranda el elemento */
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;        /* Sin scroll en la ventana principal */
+}
+
+/*
+   Scanlines CRT: líneas horizontales semitransparentes sobre TODA la app.
+   pointer-events: none garantiza que no bloqueen ningún clic.
+   z-index: 9999 hace que estén por encima de modales también — la pantalla
+   entera "parece" un monitor CRT, no solo partes de ella.
+*/
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.09) 3px,
+        rgba(0, 0, 0, 0.09) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    /* Segoe UI es la fuente del sistema en Windows; system-ui es el fallback */
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;  /* header arriba, main abajo */
+    /* Desactivar selección de texto (comportamiento de app, no de web) */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Scrollbar personalizado — delgado y rojo */
+::-webkit-scrollbar         { width: 3px; height: 3px; }
+::-webkit-scrollbar-track   { background: transparent; }
+::-webkit-scrollbar-thumb   { background: var(--red); border-radius: 2px; }
+
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+#app-header {
+    height: 56px;
+    background: var(--bg-panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    flex-shrink: 0;          /* No se encoge aunque el contenido sea grande */
+    position: relative;
+    /* Línea roja en la parte inferior */
+    border-bottom: 2px solid var(--red);
+}
+
+/*
+   Acento diagonal que "sale" de la línea roja del header.
+   El ::after crea un segundo borde decorativo más brillante
+   que va de opaco a transparente, dando sensación de velocidad.
+*/
+#app-header::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 240px;
+    width: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--red-bright), transparent);
+    transform: skewX(-40deg);  /* inclina el acento */
+}
+
+.header-title {
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 7px;    /* espaciado amplio = estética de juego */
+    text-transform: uppercase;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/*
+   Botones del header con forma de paralelogramo.
+   clip-path polygon(A B C D) define los 4 vértices del polígono:
+     A = esquina sup-izq  →  (10px, 0%) desplaza la esquina hacia la derecha
+     B = esquina sup-der  →  (100%, 0%)
+     C = esquina inf-der  →  (calc(100%-10px), 100%) desplaza hacia izquierda
+     D = esquina inf-izq  →  (0%, 100%)
+   Resultado: rectángulo con lados inclinados (paralelogramo).
+*/
+.btn-header {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 6px 20px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    clip-path: polygon(10px 0%, 100% 0%, calc(100% - 10px) 100%, 0% 100%);
+}
+
+.btn-header:hover {
+    background: var(--red);
+    color: var(--text);
+    border-color: var(--red);
+}
+
+.conn-readout {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--font-mono);
+    font-size: 17px;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+/* "SYS:" — etiqueta fija muy oscura, casi invisible */
+.conn-sys { color: #2e2e2e; }
+
+/* Texto de estado: empieza en ámbar (conectando), cambia según estado */
+.conn-label {
+    color: var(--amber);
+    transition: color 0.5s ease, text-shadow 0.5s ease;
+}
+
+/* Cursor parpadeante */
+.conn-cursor {
+    color: var(--amber);
+    font-size: 15px;
+    line-height: 1;
+    transition: color 0.3s;
+}
+
+.conn-cursor.blinking {
+    animation: cursor-blink 0.7s step-end infinite;
+}
+
+/* Estado conectado: fósforo verde con glow */
+.conn-online .conn-label {
+    color: var(--phosphor);
+    text-shadow: 0 0 10px var(--phosphor-glow), 0 0 22px rgba(0, 230, 118, 0.12);
+}
+
+/* Cursor desaparece cuando ya está conectado */
+.conn-online .conn-cursor { display: none; }
+
+/* Estado error: rojo */
+.conn-error .conn-label {
+    color: #ef4444;
+    text-shadow: 0 0 7px rgba(239, 68, 68, 0.50);
+}
+
+.conn-error .conn-cursor {
+    color: #ef4444;
+    animation: cursor-blink 0.35s step-end infinite; /* más rápido en error */
+}
+
+
+/* ============================================================
+   GRID DE TARJETAS
+   ============================================================ */
+#cards-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    gap: 14px;
+    padding: 22px;
+    flex: 1;                 /* Ocupa todo el espacio restante bajo el header */
+    overflow-y: auto;
+    align-content: start;    /* Las tarjetas se alinean arriba, no se estiran */
+    /*
+       Dot-grid: fondo de puntos muy sutiles, referencia al comic book
+       y las interfaces retro. Los puntos son #1c1c1c sobre #0d0d0d.
+    */
+    background-image: radial-gradient(circle, #1d1d1d 1px, transparent 1px);
+    background-size: 28px 28px;
+}
+
+
+/* ============================================================
+   TARJETA DE EMULADOR
+   ============================================================ */
+
+@keyframes card-slam {
+    0%   { transform: translateX(-38px) skewX(-7deg); opacity: 0; }
+    55%  { transform: translateX(5px)   skewX(1.5deg); opacity: 1; }
+    75%  { transform: translateX(-2px)  skewX(-0.4deg); }
+    100% { transform: translateX(0); }
+}
+
+.emulator-card {
+    background: var(--bg-card);
+    padding: 16px 14px 13px;
+    position: relative;
+    overflow: hidden;        /* Los pseudo-elementos no salen del borde */
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+    /*
+       La animación usa 'both': aplica el estado inicial antes de empezar
+       (la tarjeta está invisible durante el delay de stagger) y mantiene
+       el estado final al terminar.
+    */
+    animation: card-slam 0.32s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+/* Barra roja vertical en el lado izquierdo de la tarjeta */
+.emulator-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--red);
+}
+
+/*
+   Triángulo rojo en la esquina superior derecha.
+*/
+.emulator-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 0 18px 18px 0;
+    border-color: transparent var(--red) transparent transparent;
+}
+
+.emulator-card:hover {
+    transform: translateY(-5px);
+    /* Sombra roja sutil que "brilla" al hacer hover */
+    box-shadow: 0 10px 28px rgba(204, 0, 0, 0.25);
+}
+
+.card-icon {
+    font-size: 38px;
+    text-align: center;
+    display: block;
+    margin: 0 0 10px 6px;
+}
+
+/* Icono PNG para emuladores con imagen configurada */
+.card-icon-img {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;    /* escala sin deformar */
+    object-position: center;
+    display: block;
+    margin: 0 auto 10px;
+    /* Suavizado para íconos de cualquier resolución */
+    image-rendering: auto;
+    -webkit-image-rendering: auto;
+}
+
+.card-name {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    text-align: center;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    padding-left: 6px;
+}
+
+/* Nombre del software emulador en VT323*/
+.card-emulator {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    color: var(--phosphor-dim);
+    letter-spacing: 1px;
+    text-align: center;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    padding-left: 6px;
+    opacity: 0.9;
+}
+
+/* Indicador de estado en VT323 */
+.card-status {
+    font-family: var(--font-mono);
+    text-align: center;
+    font-size: 15px;
+    letter-spacing: 1px;
+    margin-bottom: 13px;
+    padding: 5px 8px 5px 12px;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.card-buttons {
+    display: flex;
+    gap: 5px;
+    padding-left: 6px;
+}
+
+/*
+   Botones de acción con clip-path para forma inclinada.
+   Más pequeños que los del header pero con la misma técnica de paralelogramo.
+*/
+.btn-upload, .btn-download {
+    flex: 1;
+    padding: 7px 4px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    color: var(--text);
+    transition: background 0.15s ease;
+    clip-path: polygon(5px 0%, 100% 0%, calc(100% - 5px) 100%, 0% 100%);
+}
+
+.btn-upload         { background: #1a3a6b; }  /* azul oscuro */
+.btn-upload:hover   { background: #1d4ed8; }
+
+.btn-download         { background: #0e4444; }  /* verde azulado oscuro */
+.btn-download:hover   { background: #0e7490; }
+
+/* Estado deshabilitado durante una operación en curso */
+.btn-upload:disabled,
+.btn-download:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;  /* evita click aunque no esté el :disabled */
+}
+
+
+/* ============================================================
+   COLOR PARA ESTADOS
+   ============================================================ */
+.s-not_configured  { color: #333; }
+.s-not_in_cloud    { color: #f97316; }
+.s-upload_pending  { color: #60a5fa; }
+.s-download_pending{ color: #22d3ee; }
+
+/* Checking: pulsa suavemente como un indicador de actividad */
+@keyframes status-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}
+
+.s-checking {
+    color: var(--amber);
+    animation: status-pulse 1.1s ease-in-out infinite;
+}
+
+/* Up to date: verde fósforo con glow — el sistema confirma sincronía */
+.s-up_to_date {
+    color: var(--phosphor);
+    text-shadow: 0 0 8px var(--phosphor-glow), 0 0 20px rgba(0, 230, 118, 0.10);
+}
+
+/* Error: glow rojo sutil */
+.s-error {
+    color: #ef4444;
+    text-shadow: 0 0 7px rgba(239, 68, 68, 0.50);
+}
+
+@keyframes status-flicker {
+    0%   { opacity: 1; }
+    20%  { opacity: 0.04; }
+    38%  { opacity: 0.8; }
+    52%  { opacity: 0.04; }
+    70%  { opacity: 1; }
+    85%  { opacity: 0.55; }
+    100% { opacity: 1; }
+}
+
+.card-status.flickering {
+    animation: status-flicker 0.16s linear;
+}
+
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+.modal-overlay {
+    position: fixed;
+    inset: 0;                /* equivale a top:0, right:0, bottom:0, left:0 */
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.12s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* La clase .hidden la añade/quita JS para mostrar/ocultar modales */
+.modal-overlay.hidden {
+    display: none;
+}
+
+/* ============================================================
+   MODALES
+   ============================================================ */
+.modal-box {
+    background: var(--bg-panel);
+    width: 480px;
+    max-width: 92vw;
+    max-height: 88vh;
+    display: flex;
+    flex-direction: column;
+    /*
+       Corte diagonal en esquina INFERIOR derecha.
+       Complementario al corte de las tarjetas (allí era superior derecha).
+    */
+    clip-path: polygon(
+        0 0, 100% 0,
+        100% calc(100% - 22px),
+        calc(100% - 22px) 100%,
+        0 100%
+    );
+    animation: modal-scan 0.22s cubic-bezier(0.77, 0, 0.175, 1) both;
+}
+
+.modal-box.wide {
+    width: 680px;   /* para el modal de resumen que necesita más espacio */
+}
+
+@keyframes modal-scan {
+    from {
+        clip-path: polygon(0 0, 100% 0, 100% 0, 0 0);
+        opacity: 0.9;
+    }
+    to {
+        clip-path: polygon(
+            0 0, 100% 0,
+            100% calc(100% - 22px),
+            calc(100% - 22px) 100%,
+            0 100%
+        );
+        opacity: 1;
+    }
+}
+
+/* Barra roja superior del modal — cursor terminal al final */
+.modal-header {
+    background: var(--red);
+    padding: 11px 18px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+@keyframes cursor-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+.modal-header::after {
+    content: ' ▮';
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 400;
+    opacity: 0.6;
+    animation: cursor-blink 1s step-end infinite;
+}
+
+/* Variante naranja/ámbar para el modal de conflicto (advertencia) */
+.modal-header.warning {
+    background: #7c2d12;   /* marrón-naranja oscuro */
+}
+
+.modal-body {
+    padding: 18px 20px;
+    overflow-y: auto;      /* scroll interno si el contenido es largo */
+    flex: 1;
+}
+
+/* Franja inferior oscura con los botones de acción */
+.modal-footer {
+    background: #080808;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+
+/* ============================================================
+   BOTONES GENERALES
+   ============================================================ */
+.btn {
+    padding: 9px 22px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    transition: background 0.12s ease;
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+}
+
+.btn.small {
+    padding: 6px 14px;
+    font-size: 9px;
+}
+
+
+.btn:active           { transform: scale(0.95) translateY(1px); }
+.btn-header:active    { transform: scale(0.94) translateY(1px); }
+.btn-upload:active,
+.btn-download:active,
+.btn-games:active     { transform: scale(0.93) translateY(1px); }
+
+.btn-primary            { background: var(--red);    color: var(--text); }
+.btn-primary:hover      { background: var(--red-bright); }
+
+.btn-secondary          { background: #222;          color: #bbb; }
+.btn-secondary:hover    { background: #333; }
+
+.btn-success            { background: #14532d;       color: var(--text); }
+.btn-success:hover      { background: #166534; }
+
+.btn-danger             { background: #7f1d1d;       color: var(--text); }
+.btn-danger:hover       { background: #991b1b; }
+
+
+/* ============================================================
+   TABLA DE RESUMEN
+   ============================================================ */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.summary-table th {
+    text-align: left;
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: var(--red);
+    text-transform: uppercase;
+    padding: 8px 10px;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.summary-table td {
+    padding: 9px 10px;
+    border-bottom: 1px solid #111;
+    color: #aaa;
+}
+
+/* Timestamps en VT323 — datos técnicos de máquina */
+.summary-table td:nth-child(3),
+.summary-table td:nth-child(4) {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: #555;
+    letter-spacing: 0.5px;
+}
+
+.summary-table tbody tr:hover td {
+    background: #161616;
+    color: var(--text);
+}
+
+
+/* ============================================================
+   CONFIGURACIÓN
+   ============================================================ */
+.settings-section-title {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 4px;
+    color: var(--red);
+    text-transform: uppercase;
+    margin: 14px 0 8px;
+    padding-left: 10px;
+    /* Barra roja vertical como acento de sección */
+    border-left: 3px solid var(--red);
+}
+
+.settings-emulator-group {
+    background: #111;
+    padding: 11px 13px;
+    margin-bottom: 8px;
+    /* Pequeña barra izquierda de acento */
+    border-left: 2px solid #2a2a2a;
+}
+
+.settings-emulator-name {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #ccc;
+    margin-bottom: 9px;
+}
+
+/* Botones de selección de idioma */
+.lang-options {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.lang-btn {
+    padding: 6px 18px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
+    transition: all 0.12s;
+    clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+
+.lang-btn.active {
+    background: var(--red);
+    color: var(--text);
+    border-color: var(--red);
+}
+
+.lang-btn:hover:not(.active) {
+    background: #1a1a1a;
+    color: var(--text);
+}
+
+
+/* ============================================================
+   ONBOARDING
+   ============================================================ */
+.onboarding-field {
+    margin-bottom: 14px;
+}
+
+.onboarding-field label {
+    font-size: 8px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.field-row {
+    display: flex;
+    gap: 6px;
+}
+
+.field-row input { flex: 1; }
+
+
+/* ============================================================
+   INPUTS
+   ============================================================ */
+input[type="text"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-left: 2px solid #2a2a2a;  /* borde izquierdo levemente más visible */
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 11px;
+    font-family: 'Consolas', 'Courier New', monospace;  /* monospace para rutas */
+    width: 100%;
+    transition: border-color 0.15s;
+}
+
+input[type="text"]:focus {
+    outline: none;
+    border-left-color: var(--red);   /* acento rojo al enfocar */
+}
+
+input[type="text"]::placeholder {
+    color: #2a2a2a;
+}
+
+/* Clase de error visual (aplicada por JS si el campo está vacío) */
+input[type="text"].invalid {
+    border-left-color: #ef4444;
+}
+
+/* Settings fields comparten el mismo estilo base de inputs */
+.settings-field {
+    margin-bottom: 8px;
+}
+
+.settings-field label {
+    font-size: 8px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 3px;
+}
+
+
+/* ============================================================
+   MODAL DE CONFLICTO
+   ============================================================ */
+.conflict-msg {
+    font-size: 12px;
+    color: #bbb;
+    margin-bottom: 14px;
+    line-height: 1.6;
+}
+
+.conflict-dates {
+    background: #0a0a0a;
+    border-left: 3px solid #ffc107;  /* amarillo de advertencia */
+    padding: 11px 14px;
+}
+
+.conflict-dates p {
+    font-size: 11px;
+    color: #888;
+    margin: 5px 0;
+    font-family: 'Consolas', monospace;
+}
+
+/* ============================================================
+   SISTEMA DE NOTIFICACIONES
+   ============================================================ */
+#notify-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 8000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 7px;
+    pointer-events: none;
+    max-width: 340px;
+}
+
+.notify-toast {
+    background: #0e0e0e;
+    border-left: 3px solid var(--phosphor);
+    padding: 10px 18px 10px 13px;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    letter-spacing: 0.5px;
+    color: #bbb;
+    pointer-events: all;
+    /* Corte en el lado derecho — mismo lenguaje que los botones de tarjeta */
+    clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    animation: toast-in 0.22s cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+
+.notify-toast.error   { border-left-color: #ef4444; }
+.notify-toast.warning { border-left-color: var(--amber); }
+
+/* Clase añadida por JS antes de eliminar el elemento */
+.notify-toast.out {
+    animation: toast-out 0.18s ease forwards;
+}
+
+@keyframes toast-in {
+    from { transform: translateX(28px) skewX(-2deg); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toast-out {
+    to { opacity: 0; transform: translateX(18px); }
+}
+
+
+/* La fecha en sí (inyectada por JS) en amarillo para resaltar */
+.conflict-dates strong {
+    color: #ffc107;
+    font-weight: 600;
+}
+
+
+/* ============================================================
+   BOTÓN "VER PARTIDAS"
+   Ocupa el ancho completo bajo los botones Subir/Descargar.
+   ============================================================ */
+.btn-games {
+    width: 100%;
+    margin-top: 5px;
+    padding: 6px 4px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    color: var(--text);
+    background: #2d1a4a;
+    transition: background 0.15s ease;
+    clip-path: polygon(5px 0%, 100% 0%, calc(100% - 5px) 100%, 0% 100%);
+    padding-left: 6px;
+}
+
+.btn-games:hover { background: #5b21b6; }
+
+.btn-games:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   TABLA DE PARTIDAS (modal juegos multi_file)
+   ============================================================ */
+.games-loading,
+.games-empty {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 24px 0;
+}
+
+.games-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.games-table th {
+    text-align: left;
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: var(--red);
+    text-transform: uppercase;
+    padding: 8px 10px;
+    border-bottom: 1px solid #1a1a1a;
+}
+
+.games-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #111;
+    color: #aaa;
+    vertical-align: middle;
+}
+
+.games-table tbody tr:hover td {
+    background: #161616;
+    color: var(--text);
+}
+
+/* Nombre del juego (sin extensión) — ligeramente más claro */
+.games-table .game-name {
+    color: #ddd;
+    font-weight: 600;
+}
+
+/* Columna de acciones: los dos mini-botones de subir/bajar */
+.games-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+}
+
+.btn-game-action {
+    padding: 5px 10px;
+    font-size: 9px;
+    font-weight: 800;
+    cursor: pointer;
+    border: none;
+    color: var(--text);
+    transition: background 0.12s;
+    clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+}
+
+.btn-game-up   { background: #1a3a6b; }
+.btn-game-up:hover   { background: #1d4ed8; }
+
+.btn-game-down { background: #0e4444; }
+.btn-game-down:hover { background: #0e7490; }
+
+.btn-game-action:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+
+/* ============================================================
+   ESTADO DE CREDENCIALES GOOGLE API (settings modal)
+   ============================================================ */
+.creds-status {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    padding: 8px 11px;
+    margin-bottom: 8px;
+    background: #0a0a0a;
+    border-left: 2px solid #2a2a2a;
+    transition: border-color 0.3s, color 0.3s;
+}
+
+.creds-ok {
+    color: var(--phosphor);
+    border-left-color: var(--phosphor-dim);
+    text-shadow: 0 0 6px var(--phosphor-glow);
+}
+
+.creds-missing {
+    color: #ef4444;
+    border-left-color: #7f1d1d;
+}
+
+/* Botón de importar credenciales: ancho completo, discreto */
+.btn-import-creds {
+    display: block;
+    width: 100%;
+    padding: 7px 14px;
+    margin-bottom: 4px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid #2a2a2a;
+    background: #0d0d0d;
+    color: var(--text-dim);
+    text-align: left;
+    transition: all 0.12s;
+    clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+
+.btn-import-creds:hover {
+    border-color: var(--red);
+    color: var(--text);
+    background: #1a0000;
+}
+
+
+/* ============================================================
+   LISTA DE EMULADORES PERSONALIZADOS (settings modal)
+   ============================================================ */
+.custom-emu-list {
+    list-style: none;
+    margin-bottom: 6px;
+}
+
+.custom-emu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #111;
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    border-left: 2px solid #2a2a2a;
+    transition: border-color 0.12s;
+}
+
+.custom-emu-item:hover {
+    border-left-color: var(--red);
+}
+
+.custom-emu-item-name {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #ccc;
+}
+
+.custom-emu-item-sub {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: #444;
+    margin-top: 1px;
+}
+
+.custom-emu-item-actions {
+    display: flex;
+    gap: 5px;
+    flex-shrink: 0;
+}
+
+/* Botón "Agregar emulador" — borde punteado, estilo CTA secundario */
+.btn-add-emu {
+    display: block;
+    width: 100%;
+    padding: 8px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px dashed #282828;
+    background: transparent;
+    color: var(--text-dim);
+    text-align: center;
+    transition: all 0.14s;
+}
+
+.btn-add-emu:hover {
+    border-color: var(--red);
+    color: var(--red);
+    background: #0d0000;
+}
+
+
+/* ============================================================
+   SELECTOR DE TIPO DE GUARDADO (modal emulador)
+   ============================================================ */
+.save-type-group {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-top: 2px;
+}
+
+.save-type-btn {
+    padding: 5px 11px;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-dim);
+    transition: all 0.12s;
+    clip-path: polygon(5px 0%, 100% 0%, calc(100% - 5px) 100%, 0% 100%);
+}
+
+.save-type-btn.active {
+    background: var(--red);
+    color: var(--text);
+    border-color: var(--red);
+}
+
+.save-type-btn:hover:not(.active) {
+    background: #1a1a1a;
+    color: var(--text);
+}

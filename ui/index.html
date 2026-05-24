@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <!--
+        viewport: ajusta la escala para que la UI se vea correctamente
+        en la ventana nativa
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Save Hub</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+    <header id="app-header">
+        <div class="header-title">CLOUD EMU-HUB</div>
+
+        <!--
+            Readout de conexión estilo terminal, centrado en el header.
+            setConnStatus() en app.js actualiza el label y activa/desactiva
+            el cursor parpadeante según el estado.
+        -->
+        <div class="conn-readout" id="conn-readout">
+            <span class="conn-sys">SYS:</span>
+            <span class="conn-label" id="conn-label">INIT</span>
+            <span class="conn-cursor blinking" id="conn-cursor">▮</span>
+        </div>
+
+        <div class="header-controls">
+            <!-- Botón de resumen de sincronización -->
+            <button class="btn-header" onclick="showSummary()">
+                <span data-t="btn_summary">RESUMEN</span>
+            </button>
+
+            <!-- Botón de configuración global -->
+            <button class="btn-header" onclick="showSettings()">
+                ⚙ <span data-t="btn_settings">CONFIG</span>
+            </button>
+        </div>
+    </header>
+
+
+    <!-- ============================================================
+         ÁREA PRINCIPAL — Grid de tarjetas de emuladores
+         Las tarjetas se generan dinámicamente en JS (renderCards())
+         usando los datos de data/config.json recibidos de Python.
+         ============================================================ -->
+    <main id="cards-container">
+        <!-- Generado por renderCards() en app.js -->
+    </main>
+
+
+    <!-- ============================================================
+         RESUMEN DE SINCRONIZACIÓN
+         Muestra una tabla con el estado de todos los emuladores.
+         Se abre con showSummary() y se cierra con closeSummary().
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="summary-overlay">
+        <div class="modal-box wide">
+
+            <div class="modal-header">
+                <span data-t="summary_title">RESUMEN DE SINCRONIZACIÓN</span>
+            </div>
+
+            <div class="modal-body">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th data-t="summary_col_system">SISTEMA</th>
+                            <th data-t="summary_col_status">ESTADO</th>
+                            <th data-t="summary_col_local">MODIFICADO LOCAL</th>
+                            <th data-t="summary_col_cloud">MODIFICADO NUBE</th>
+                            <th data-t="summary_col_action">ACCIÓN</th>
+                        </tr>
+                    </thead>
+                    <!--
+                        tbody se rellena dinámicamente en showSummary() (app.js)
+                        usando el caché state.statuses
+                    -->
+                    <tbody id="summary-tbody"></tbody>
+                </table>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSummary()">
+                    <span data-t="summary_btn_close">CERRAR</span>
+                </button>
+                <!-- Actualizar vuelve a consultar el estado de todos los emuladores -->
+                <button class="btn btn-primary" onclick="refreshSummary()">
+                    <span data-t="summary_btn_refresh">↻ ACTUALIZAR</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         CONFIGURACIÓN
+         Permite cambiar idioma y las rutas/IDs de cada emulador.
+         El cuerpo (#settings-body) se genera en renderSettingsFields() (app.js)
+         para que refleje dinámicamente los emuladores del config.json.
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="settings-overlay">
+        <div class="modal-box">
+
+            <div class="modal-header">
+                <span data-t="settings_title">CONFIGURACIÓN</span>
+            </div>
+
+            <!--
+                El contenido se inyecta por JavaScript para que sea dinámico
+                (si el usuario añade un emulador al JSON, aparece aquí solo)
+            -->
+            <div class="modal-body" id="settings-body"></div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeSettings()">
+                    <span data-t="onboarding_cancel">CANCELAR</span>
+                </button>
+                <button class="btn btn-success" onclick="saveSettings()">
+                    <span data-t="settings_save">GUARDAR CAMBIOS</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         ONBOARDING
+         Aparece la primera vez que el usuario intenta sincronizar
+         un emulador sin configurar (local_path o drive_id vacíos).
+         Después de guardar, continúa automáticamente con la acción
+         que el usuario quería hacer (subir o descargar).
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="onboarding-overlay">
+        <div class="modal-box">
+
+            <!--
+                El texto del encabezado se actualiza con el nombre del emulador
+                en showOnboarding() para que el usuario sepa cuál está configurando.
+            -->
+            <div class="modal-header" id="ob-header">CONFIGURACIÓN INICIAL</div>
+
+            <div class="modal-body">
+
+                <!-- Campo: carpeta local de guardados -->
+                <div class="onboarding-field">
+                    <label data-t="onboarding_local_path">CARPETA LOCAL</label>
+                    <div class="field-row">
+                        <!--
+                            readonly: el usuario no escribe la ruta a mano,
+                            sino que la elige con el botón Explorar (que llama
+                            a browseOnboardingFolder() → Python → diálogo del SO)
+                        -->
+                        <input type="text" id="ob-local-path" readonly
+                               placeholder="/ruta/a/tus/guardados">
+                        <button class="btn btn-secondary small"
+                                onclick="browseOnboardingFolder()">
+                            <span data-t="onboarding_browse">EXPLORAR</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Campo: ID de la carpeta en Google Drive -->
+                <div class="onboarding-field">
+                    <label data-t="onboarding_drive_id">ID DE CARPETA EN GOOGLE DRIVE</label>
+                    <!--
+                        El Drive ID se obtiene de la URL de la carpeta en Drive:
+                        drive.google.com/drive/folders/[ESTE_ES_EL_ID]
+                    -->
+                    <input type="text" id="ob-drive-id"
+                           placeholder="1aBcDeFgHiJkLmNoPqRsTuVwXyZ...">
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeOnboarding()">
+                    <span data-t="onboarding_cancel">CANCELAR</span>
+                </button>
+                <button class="btn btn-success" onclick="saveOnboarding()">
+                    <span data-t="onboarding_save">GUARDAR Y CONTINUAR</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         CONFLICTO DE TIMESTAMPS
+         Se muestra antes de una subida/bajada cuando el archivo destino
+         es más reciente que el origen (previene pérdida accidental de datos).
+
+         En lugar de usar callbacks, este modal devuelve una Promise JS
+         (ver showConflict() en app.js) para poder usarlo con await:
+             const proceed = await showConflict(localTime, driveTime);
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="conflict-overlay">
+        <div class="modal-box">
+
+            <div class="modal-header warning">
+                ⚠&nbsp; <span data-t="conflict_title">CONFLICTO DETECTADO</span>
+            </div>
+
+            <div class="modal-body">
+
+                <p class="conflict-msg" data-t="conflict_message">
+                    Estás a punto de sobreescribir un archivo más reciente con uno más antiguo.
+                </p>
+
+                <!-- Los timestamps se inyectan por JS antes de mostrar el modal -->
+                <div class="conflict-dates">
+                    <p>
+                        <span data-t="conflict_local_date">Local:</span>
+                        <strong id="conflict-local-date"></strong>
+                    </p>
+                    <p>
+                        <span data-t="conflict_drive_date">Nube:</span>
+                        <strong id="conflict-drive-date"></strong>
+                    </p>
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <!--
+                    Estos botones tienen id porque showConflict() les asigna
+                    onclick dinámicamente para resolver la Promise.
+                -->
+                <button class="btn btn-secondary" id="conflict-cancel-btn">
+                    <span data-t="conflict_cancel">CANCELAR</span>
+                </button>
+                <button class="btn btn-danger" id="conflict-proceed-btn">
+                    <span data-t="conflict_confirm">CONTINUAR DE TODAS FORMAS</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         JUEGOS (multi_file — MelonDS / DS)
+         Se abre cuando el usuario hace clic en "VER PARTIDAS" de la
+         tarjeta DS. Muestra una tabla con cada .sav encontrado local
+         y/o en Drive, con botones de subida/bajada individuales.
+
+         Los botones usan data-* attributes para pasar filepath/filename
+         de forma segura (evita problemas con caracteres especiales en
+         onclick inline).
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="games-overlay">
+        <div class="modal-box wide">
+
+            <div class="modal-header">
+                <!-- El título incluye el nombre del emulador, actualizado en showGamesModal() -->
+                <span id="games-modal-title" data-t="games_title">PARTIDAS GUARDADAS</span>
+            </div>
+
+            <div class="modal-body" id="games-body">
+                <!-- Estado de carga -->
+                <div id="games-loading" class="games-loading" data-t="games_loading">
+                    Cargando partidas...
+                </div>
+
+                <!-- Tabla de partidas (oculta hasta que los datos carguen) -->
+                <table class="games-table hidden" id="games-table">
+                    <thead>
+                        <tr>
+                            <th data-t="games_col_game">JUEGO</th>
+                            <th data-t="games_col_status">ESTADO</th>
+                            <th data-t="games_col_local">LOCAL</th>
+                            <th data-t="games_col_drive">NUBE</th>
+                            <th></th>  <!-- columna de acciones -->
+                        </tr>
+                    </thead>
+                    <!--
+                        tbody se rellena dinámicamente por renderGamesList() en app.js.
+                        Los botones llevan data-filepath y data-filename para que
+                        uploadGameFromBtn / downloadGameFromBtn lean la ruta sin
+                        problemas de comillas o caracteres especiales.
+                    -->
+                    <tbody id="games-tbody"></tbody>
+                </table>
+
+                <!-- Mensaje si no hay partidas -->
+                <div id="games-empty" class="games-empty hidden" data-t="games_no_saves">
+                    No se encontraron partidas.
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeGamesModal()">
+                    <span data-t="games_btn_close">CERRAR</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!-- ============================================================
+         GESTIÓN DE EMULADOR (Agregar / Editar)
+         Se abre desde la sección "Emuladores personalizados" en Settings.
+         En modo agregar muestra el campo "Identificador"; en modo editar
+         ese campo está oculto (la clave no se puede cambiar).
+         ============================================================ -->
+    <div class="modal-overlay hidden" id="emulator-modal-overlay">
+        <div class="modal-box">
+
+            <div class="modal-header" id="emulator-modal-header">
+                AGREGAR EMULADOR
+            </div>
+
+            <div class="modal-body">
+
+                <!-- Nombre de la plataforma -->
+                <div class="settings-field">
+                    <label data-t="emu_field_platform">PLATAFORMA</label>
+                    <input type="text" id="em-name" placeholder="Nintendo DS">
+                </div>
+
+                <!-- Nombre del software emulador -->
+                <div class="settings-field">
+                    <label data-t="emu_field_software">SOFTWARE EMULADOR</label>
+                    <input type="text" id="em-emulator" placeholder="MelonDS">
+                </div>
+
+                <!-- Clave identificadora (solo en modo agregar) -->
+                <div class="settings-field" id="em-key-field">
+                    <label data-t="emu_field_key">IDENTIFICADOR</label>
+                    <input type="text" id="em-key" placeholder="ds  (solo letras, números y guiones)">
+                </div>
+
+                <!-- Tipo de guardado -->
+                <div class="settings-field">
+                    <label data-t="emu_field_save_type">TIPO DE GUARDADO</label>
+                    <div class="save-type-group" id="em-save-type-group">
+                        <button class="save-type-btn active" data-type="file"
+                                onclick="selectSaveType(this)">FILE</button>
+                        <button class="save-type-btn" data-type="dual_file"
+                                onclick="selectSaveType(this)">DUAL FILE</button>
+                        <button class="save-type-btn" data-type="folder"
+                                onclick="selectSaveType(this)">FOLDER</button>
+                        <button class="save-type-btn" data-type="multi_file"
+                                onclick="selectSaveType(this)">MULTI FILE</button>
+                    </div>
+                </div>
+
+                <!-- Extensión (oculto para tipo folder) -->
+                <div class="settings-field" id="em-extension-field">
+                    <label data-t="emu_field_extension">EXTENSIÓN</label>
+                    <input type="text" id="em-extension" placeholder=".sav">
+                </div>
+
+                <!-- Icono -->
+                <div class="settings-field">
+                    <label data-t="emu_field_icon">ICONO</label>
+                    <div class="field-row">
+                        <input type="text" id="em-icon"
+                               placeholder="C:/ruta/al/icono.png" readonly>
+                        <button class="btn btn-secondary small"
+                                onclick="selectEmulatorIcon()">…</button>
+                    </div>
+                </div>
+
+                <!-- Carpeta local (opcional) -->
+                <div class="settings-field">
+                    <label data-t="emu_field_local">CARPETA LOCAL (OPCIONAL)</label>
+                    <div class="field-row">
+                        <input type="text" id="em-local-path"
+                               placeholder="/ruta/a/guardados" readonly>
+                        <button class="btn btn-secondary small"
+                                onclick="browseEmulatorFolder()">…</button>
+                    </div>
+                </div>
+
+                <!-- Drive ID (opcional) -->
+                <div class="settings-field">
+                    <label data-t="emu_field_drive">ID DE CARPETA EN DRIVE (OPCIONAL)</label>
+                    <input type="text" id="em-drive-id"
+                           placeholder="1aBcDeFgHiJkLmNoPqRsTuV...">
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEmulatorModal()">
+                    <span data-t="onboarding_cancel">CANCELAR</span>
+                </button>
+                <button class="btn btn-success" onclick="saveEmulatorModal()">
+                    <span data-t="settings_save">GUARDAR</span>
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+
+    <!--
+        app.js se carga al final del body para que el DOM esté listo.
+        PyWebView inyecta window.pywebview.api DESPUÉS de que la página carga,
+        por eso el código principal está dentro del evento 'pywebviewready'.
+    -->
+    <!--
+        Contenedor de toasts. Los divs .notify-toast se inyectan aquí
+        dinámicamente por notify() en app.js cuando ocurre un evento
+        (éxito, error, advertencia). Reemplaza los alert() del sistema
+        para mantener la estética del juego sin romper inmersión.
+    -->
+    <div id="notify-container" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+
+</body>
+</html>
